@@ -14,7 +14,6 @@
   // Language strings - Traditional Chinese
   const translations = {
     en: {
-      // General
       loading: "Loading enrollment list…",
       noEventTitle: "Event not found",
       noEventMsg: "Check the link from your WhatsApp group. It should look like <code>index.html?e=YOUR_EVENT_ID</code>.",
@@ -22,18 +21,12 @@
       noEventConfig: "System not configured. Please contact event organizer.",
       refresh: "Refresh",
       footer: "Share this page in your WhatsApp group · Auto-refreshes every 30s",
-      
-      // Stats labels
       confirmedLabel: "Confirmed",
       waitlistLabel: "Waitlist",
-      
-      // Queue
       queueTitle: "Queue",
       emptyQueue: "No enrollments yet. Be the first!",
       yourStatus: "Your position: #{{position}} ({{status}}) · {{time}}",
       yourStatusDevice: "You enrolled on this device. Tap Cancel to leave the queue.",
-      
-      // Form
       enrollTitle: "Enroll",
       ruleText: "Fair rule: order is by enrollment <strong>time on this page</strong>. Everyone sees the same list. Cancel if you cannot attend so the next person can move up.",
       nameLabel: "Your name *",
@@ -42,8 +35,6 @@
       phonePlaceholder: "e.g. 9123 4567",
       enrollBtn: "Enroll",
       cancelBtn: "Cancel my spot",
-      
-      // Messages
       errorNameRequired: "Please enter your name.",
       errorEnrollFailed: "Enrollment failed.",
       errorCancelFailed: "Cancel failed.",
@@ -56,18 +47,13 @@
       successEnrolled: "Enrolled!",
       successWaitlist: "Added to waitlist.",
       successCancelled: "Enrollment cancelled.",
-      
-      // Status
       statusOpen: "Enrollment open",
       statusClosed: "Enrollment closed",
-      
-      // Event info
       maxSpots: "Max {{seats}} spots · First come, first served",
       opensAt: " · Opens {{time}}",
       closesAt: " · Closes {{time}}",
     },
     zh: {
-      // General
       loading: "載入報名名單中…",
       noEventTitle: "活動未找到",
       noEventMsg: "請檢查 WhatsApp 群組中的連結。連結應為 <code>index.html?e=活動ID</code>。",
@@ -75,18 +61,12 @@
       noEventConfig: "系統未配置，請聯繫活動組織者。",
       refresh: "刷新",
       footer: "在 WhatsApp 群組中分享此頁面 · 每 30 秒自動刷新",
-      
-      // Stats labels
       confirmedLabel: "已確認",
       waitlistLabel: "候補",
-      
-      // Queue
       queueTitle: "排隊名單",
       emptyQueue: "暫無報名。成為第一個！",
       yourStatus: "您的位置：#{{position}} ({{status}}) · {{time}}",
       yourStatusDevice: "您已在此裝置上報名。點擊取消離開隊伍。",
-      
-      // Form
       enrollTitle: "報名",
       ruleText: "公平規則：順序按此頁面的<strong>報名時間</strong>排序。所有人看到相同名單。如無法出席請取消，讓下一位補上。",
       nameLabel: "您的姓名 *",
@@ -95,8 +75,6 @@
       phonePlaceholder: "例如：91234567",
       enrollBtn: "報名",
       cancelBtn: "取消我的名額",
-      
-      // Messages
       errorNameRequired: "請輸入您的姓名。",
       errorEnrollFailed: "報名失敗。",
       errorCancelFailed: "取消失敗。",
@@ -109,12 +87,8 @@
       successEnrolled: "報名成功！",
       successWaitlist: "已加入候補名單。",
       successCancelled: "已取消報名。",
-      
-      // Status
       statusOpen: "報名開放中",
       statusClosed: "報名已截止",
-      
-      // Event info
       maxSpots: "最多 {{seats}} 個名額 · 先到先得",
       opensAt: " · 開放時間 {{time}}",
       closesAt: " · 截止時間 {{time}}",
@@ -189,7 +163,8 @@
     }
     
     // Update active class on language buttons
-    $$(".lang-btn").forEach(btn => {
+    const langBtns = $$(".lang-btn");
+    langBtns.forEach(btn => {
       if (btn.dataset.lang === currentLang) {
         btn.classList.add("active");
       } else {
@@ -288,7 +263,9 @@
     if (eventId) return eventId;
     els.loading.classList.add("hidden");
     els.noEvent.classList.remove("hidden");
-    els.noEvent.querySelector("p").innerHTML = t("noEventMissing");
+    if (els.noEvent && els.noEvent.querySelector("p")) {
+      els.noEvent.querySelector("p").innerHTML = t("noEventMissing");
+    }
     return null;
   }
 
@@ -342,7 +319,9 @@
       els.loading.classList.add("hidden");
       els.mainContent.classList.add("hidden");
       els.noEvent.classList.remove("hidden");
-      els.noEvent.querySelector("p").textContent = data.error || t("noEventTitle");
+      if (els.noEvent && els.noEvent.querySelector("p")) {
+        els.noEvent.querySelector("p").textContent = data.error || t("noEventTitle");
+      }
       return;
     }
 
@@ -511,6 +490,19 @@
     }
   }
 
+  function setupLanguageButtons() {
+    const langBtns = $$(".lang-btn");
+    langBtns.forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const lang = btn.dataset.lang;
+        if (lang === "en" || lang === "zh") {
+          setLanguage(lang);
+        }
+      });
+    });
+  }
+
   function init() {
     // Load saved language
     const savedLang = localStorage.getItem(STORAGE_LANG);
@@ -534,35 +526,41 @@
     updateUILanguage();
     
     // Setup language switcher buttons
-    $$(".lang-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        setLanguage(btn.dataset.lang);
-      });
-    });
+    setupLanguageButtons();
 
     if (!apiUrl) {
       showToast(t("errorApiNotConfigured"), "error");
-      els.loading.classList.add("hidden");
-      els.noEvent.classList.remove("hidden");
-      els.noEvent.querySelector("p").innerHTML = t("noEventConfig");
+      if (els.loading) els.loading.classList.add("hidden");
+      if (els.noEvent) {
+        els.noEvent.classList.remove("hidden");
+        if (els.noEvent.querySelector("p")) {
+          els.noEvent.querySelector("p").innerHTML = t("noEventConfig");
+        }
+      }
       return;
     }
 
     if (!eventId) {
-      els.loading.classList.add("hidden");
-      els.noEvent.classList.remove("hidden");
-      els.noEvent.querySelector("p").innerHTML = t("noEventMissing");
+      if (els.loading) els.loading.classList.add("hidden");
+      if (els.noEvent) {
+        els.noEvent.classList.remove("hidden");
+        if (els.noEvent.querySelector("p")) {
+          els.noEvent.querySelector("p").innerHTML = t("noEventMissing");
+        }
+      }
       loadProfile();
       return;
     }
 
     loadProfile();
-    els.enrollForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      enroll();
-    });
-    els.cancelBtn.addEventListener("click", cancel);
-    els.refreshBtn.addEventListener("click", refresh);
+    if (els.enrollForm) {
+      els.enrollForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        enroll();
+      });
+    }
+    if (els.cancelBtn) els.cancelBtn.addEventListener("click", cancel);
+    if (els.refreshBtn) els.refreshBtn.addEventListener("click", refresh);
     refresh();
     setInterval(refresh, 30000);
   }
