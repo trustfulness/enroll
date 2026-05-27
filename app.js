@@ -3,20 +3,130 @@
 
   const params = new URLSearchParams(window.location.search);
   const eventId = (params.get("e") || params.get("event") || "").trim();
-  const forceDemo = params.get("demo") === "1";
   const apiUrl = (window.ENROLL_CONFIG?.apiUrl || "").trim();
-  const isDemo = forceDemo || !apiUrl;
+  const urlLang = params.get("lang") || "";
 
   const STORAGE_TOKEN = "enroll_token_" + (eventId || "default");
   const STORAGE_PROFILE = "enroll_profile";
-  const DEMO_STORAGE = "enroll_demo_data";
+  const STORAGE_LANG = "enroll_language";
   const TZ_HK = "Asia/Hong_Kong";
 
+  // Language strings - Traditional Chinese
+  const translations = {
+    en: {
+      // General
+      loading: "Loading enrollment list…",
+      noEventTitle: "Event not found",
+      noEventMsg: "Check the link from your WhatsApp group. It should look like <code>index.html?e=YOUR_EVENT_ID</code>.",
+      noEventMissing: "Missing event ID. Use a link like ?e=sat-pickleball (ask your organizer for the correct link).",
+      noEventConfig: "System not configured. Please contact event organizer.",
+      refresh: "Refresh",
+      footer: "Share this page in your WhatsApp group · Auto-refreshes every 30s",
+      
+      // Stats labels
+      confirmedLabel: "Confirmed",
+      waitlistLabel: "Waitlist",
+      
+      // Queue
+      queueTitle: "Queue",
+      emptyQueue: "No enrollments yet. Be the first!",
+      yourStatus: "Your position: #{{position}} ({{status}}) · {{time}}",
+      yourStatusDevice: "You enrolled on this device. Tap Cancel to leave the queue.",
+      
+      // Form
+      enrollTitle: "Enroll",
+      ruleText: "Fair rule: order is by enrollment <strong>time on this page</strong>. Everyone sees the same list. Cancel if you cannot attend so the next person can move up.",
+      nameLabel: "Your name *",
+      phoneLabel: "Phone (optional, helps identify you)",
+      namePlaceholder: "e.g. Alex",
+      phonePlaceholder: "e.g. 9123 4567",
+      enrollBtn: "Enroll",
+      cancelBtn: "Cancel my spot",
+      
+      // Messages
+      errorNameRequired: "Please enter your name.",
+      errorEnrollFailed: "Enrollment failed.",
+      errorCancelFailed: "Cancel failed.",
+      errorAlreadyEnrolled: "You are already enrolled for this event.",
+      errorEventClosed: "This event is closed.",
+      errorNotOpen: "Enrollment is not open right now.",
+      errorNoToken: "No enrollment found on this device.",
+      errorApiNotConfigured: "API not configured. Please contact organizer.",
+      confirmCancel: "Cancel your enrollment for this event?",
+      successEnrolled: "Enrolled!",
+      successWaitlist: "Added to waitlist.",
+      successCancelled: "Enrollment cancelled.",
+      
+      // Status
+      statusOpen: "Enrollment open",
+      statusClosed: "Enrollment closed",
+      
+      // Event info
+      maxSpots: "Max {{seats}} spots · First come, first served",
+      opensAt: " · Opens {{time}}",
+      closesAt: " · Closes {{time}}",
+    },
+    zh: {
+      // General
+      loading: "載入報名名單中…",
+      noEventTitle: "活動未找到",
+      noEventMsg: "請檢查 WhatsApp 群組中的連結。連結應為 <code>index.html?e=活動ID</code>。",
+      noEventMissing: "缺少活動 ID。請使用類似 ?e=sat-pickleball 的連結（向組織者索取正確連結）。",
+      noEventConfig: "系統未配置，請聯繫活動組織者。",
+      refresh: "刷新",
+      footer: "在 WhatsApp 群組中分享此頁面 · 每 30 秒自動刷新",
+      
+      // Stats labels
+      confirmedLabel: "已確認",
+      waitlistLabel: "候補",
+      
+      // Queue
+      queueTitle: "排隊名單",
+      emptyQueue: "暫無報名。成為第一個！",
+      yourStatus: "您的位置：#{{position}} ({{status}}) · {{time}}",
+      yourStatusDevice: "您已在此裝置上報名。點擊取消離開隊伍。",
+      
+      // Form
+      enrollTitle: "報名",
+      ruleText: "公平規則：順序按此頁面的<strong>報名時間</strong>排序。所有人看到相同名單。如無法出席請取消，讓下一位補上。",
+      nameLabel: "您的姓名 *",
+      phoneLabel: "電話（選填，用於識別身份）",
+      namePlaceholder: "例如：陳大明",
+      phonePlaceholder: "例如：91234567",
+      enrollBtn: "報名",
+      cancelBtn: "取消我的名額",
+      
+      // Messages
+      errorNameRequired: "請輸入您的姓名。",
+      errorEnrollFailed: "報名失敗。",
+      errorCancelFailed: "取消失敗。",
+      errorAlreadyEnrolled: "您已報名此活動。",
+      errorEventClosed: "此活動已截止報名。",
+      errorNotOpen: "目前不在報名開放時間。",
+      errorNoToken: "此裝置上未找到報名記錄。",
+      errorApiNotConfigured: "系統未配置，請聯繫活動組織者。",
+      confirmCancel: "確定取消您的報名名額嗎？",
+      successEnrolled: "報名成功！",
+      successWaitlist: "已加入候補名單。",
+      successCancelled: "已取消報名。",
+      
+      // Status
+      statusOpen: "報名開放中",
+      statusClosed: "報名已截止",
+      
+      // Event info
+      maxSpots: "最多 {{seats}} 個名額 · 先到先得",
+      opensAt: " · 開放時間 {{time}}",
+      closesAt: " · 截止時間 {{time}}",
+    }
+  };
+
+  let currentLang = "en";
+
   const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => document.querySelectorAll(sel);
 
   const els = {
-    demoBanner: $("#demoBanner"),
-    configBanner: $("#configBanner"),
     eventTitle: $("#eventTitle"),
     eventSubtitle: $("#eventSubtitle"),
     statusBadge: $("#statusBadge"),
@@ -34,7 +144,72 @@
     loading: $("#loading"),
     noEvent: $("#noEvent"),
     myStatus: $("#myStatus"),
+    queueTitle: $("#queueTitle"),
+    enrollTitle: $("#enrollTitle"),
+    ruleText: $("#ruleText"),
+    nameLabel: $("#nameLabel"),
+    phoneLabel: $("#phoneLabel"),
+    footer: $("#footer"),
+    confirmedLabel: $("#confirmedLabel"),
+    waitlistLabel: $("#waitlistLabel"),
   };
+
+  function t(key, replacements = {}) {
+    let text = translations[currentLang][key] || translations.en[key] || key;
+    Object.keys(replacements).forEach(r => {
+      text = text.replace(new RegExp(`{{${r}}}`, 'g'), replacements[r]);
+    });
+    return text;
+  }
+
+  function updateUILanguage() {
+    // Update static text elements
+    if (els.queueTitle) els.queueTitle.textContent = t("queueTitle");
+    if (els.enrollTitle) els.enrollTitle.textContent = t("enrollTitle");
+    if (els.ruleText) els.ruleText.innerHTML = t("ruleText");
+    if (els.nameLabel) els.nameLabel.textContent = t("nameLabel");
+    if (els.phoneLabel) els.phoneLabel.textContent = t("phoneLabel");
+    if (els.enrollBtn) els.enrollBtn.textContent = t("enrollBtn");
+    if (els.cancelBtn) els.cancelBtn.textContent = t("cancelBtn");
+    if (els.refreshBtn) els.refreshBtn.textContent = t("refresh");
+    if (els.footer) els.footer.innerHTML = t("footer");
+    if (els.confirmedLabel) els.confirmedLabel.textContent = t("confirmedLabel");
+    if (els.waitlistLabel) els.waitlistLabel.textContent = t("waitlistLabel");
+    
+    // Update placeholders
+    if (els.nameInput) els.nameInput.placeholder = t("namePlaceholder");
+    if (els.phoneInput) els.phoneInput.placeholder = t("phonePlaceholder");
+    
+    // Update empty queue message
+    if (els.queueEmpty) els.queueEmpty.textContent = t("emptyQueue");
+    
+    // Update loading and no-event messages
+    if (els.loading && els.loading.classList.contains("hidden") === false) {
+      els.loading.textContent = t("loading");
+    }
+    
+    // Update active class on language buttons
+    $$(".lang-btn").forEach(btn => {
+      if (btn.dataset.lang === currentLang) {
+        btn.classList.add("active");
+      } else {
+        btn.classList.remove("active");
+      }
+    });
+  }
+
+  function setLanguage(lang) {
+    if (translations[lang]) {
+      currentLang = lang;
+      localStorage.setItem(STORAGE_LANG, lang);
+      updateUILanguage();
+      
+      // Re-render current data to update dynamic content
+      if (window._lastEventData) {
+        renderEvent(window._lastEventData);
+      }
+    }
+  }
 
   function showToast(message, type) {
     const toast = $("#toast");
@@ -82,21 +257,6 @@
     );
   }
 
-  function nowHongKongStored() {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: TZ_HK,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).formatToParts(new Date());
-    const get = (type) => parts.find((p) => p.type === type)?.value || "00";
-    return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")} HKT`;
-  }
-
   function loadProfile() {
     try {
       const p = JSON.parse(localStorage.getItem(STORAGE_PROFILE) || "{}");
@@ -128,142 +288,16 @@
     if (eventId) return eventId;
     els.loading.classList.add("hidden");
     els.noEvent.classList.remove("hidden");
-    els.noEvent.querySelector("p").textContent =
-      "Missing event ID. Use a link like ?e=sat-pickleball (ask your organizer for the correct link).";
+    els.noEvent.querySelector("p").innerHTML = t("noEventMissing");
     return null;
   }
-
-  // ——— Demo backend (localStorage only) ———
-
-  function demoLoad() {
-    try {
-      return JSON.parse(localStorage.getItem(DEMO_STORAGE) || "{}");
-    } catch (_) {
-      return {};
-    }
-  }
-
-  function demoSave(data) {
-    localStorage.setItem(DEMO_STORAGE, JSON.stringify(data));
-  }
-
-  function demoEnsureEvent(data, eid) {
-    if (!data.events) data.events = {};
-    if (!data.enrollments) data.enrollments = {};
-    if (!data.events[eid]) {
-      data.events[eid] = {
-        eventId: eid,
-        title: eid === "demo" ? "Demo pickup game" : "Event " + eid,
-        maxSeats: 10,
-        opensAt: "",
-        closesAt: "",
-        active: true,
-      };
-    }
-    if (!data.enrollments[eid]) data.enrollments[eid] = [];
-    return data;
-  }
-
-  function demoApi(action, body, eid) {
-    const data = demoEnsureEvent(demoLoad(), eid);
-    const ev = data.events[eid];
-    const list = data.enrollments[eid].filter((r) => r.status === "active");
-    list.sort(
-      (a, b) =>
-        (parseHongKongDate(a.enrolledAt)?.getTime() || 0) -
-        (parseHongKongDate(b.enrolledAt)?.getTime() || 0)
-    );
-
-    if (action === "list") {
-      const maxSeats = Number(ev.maxSeats) || 0;
-      const enrollments = list.map((row, i) => {
-        const position = i + 1;
-        const confirmed = maxSeats > 0 ? position <= maxSeats : true;
-        return {
-          position,
-          name: row.name,
-          phone: row.phone || "",
-          enrolledAt: row.enrolledAt,
-          status: confirmed ? "confirmed" : "waitlist",
-        };
-      });
-      return Promise.resolve({
-        ok: true,
-        event: {
-          eventId: ev.eventId,
-          title: ev.title,
-          maxSeats,
-          opensAt: ev.opensAt || "",
-          closesAt: ev.closesAt || "",
-          active: ev.active !== false,
-        },
-        enrollments,
-        confirmedCount: enrollments.filter((e) => e.status === "confirmed").length,
-        waitlistCount: enrollments.filter((e) => e.status === "waitlist").length,
-        isOpen: ev.active !== false,
-      });
-    }
-
-    if (action === "enroll") {
-      const name = (body.name || "").trim();
-      const phone = (body.phone || "").trim();
-      if (!name) return Promise.resolve({ ok: false, error: "Name is required." });
-
-      const dup = list.some(
-        (r) =>
-          (phone && r.phone === phone) || r.name.toLowerCase() === name.toLowerCase()
-      );
-      if (dup) return Promise.resolve({ ok: false, error: "You are already enrolled." });
-
-      const token = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
-      data.enrollments[eid].push({
-        name,
-        phone,
-        enrolledAt: nowHongKongStored(),
-        status: "active",
-        token,
-      });
-      demoSave(data);
-      return demoApi("list", {}, eid).then((updated) => {
-        const me = updated.enrollments.find(
-          (e) =>
-            e.name === name && (!phone || !e.phone || e.phone === phone)
-        );
-        return {
-          ok: true,
-          token,
-          enrollment: me,
-          message: me?.status === "waitlist" ? "Added to waitlist." : "You are enrolled.",
-          ...updated,
-        };
-      });
-    }
-
-    if (action === "cancel") {
-      const token = (body.token || "").trim();
-      const rows = data.enrollments[eid];
-      const idx = rows.findIndex((r) => r.token === token && r.status === "active");
-      if (idx < 0) return Promise.resolve({ ok: false, error: "Enrollment not found." });
-      rows[idx].status = "cancelled";
-      demoSave(data);
-      return demoApi("list", {}, eid).then((updated) => ({
-        ok: true,
-        message: "Enrollment cancelled.",
-        ...updated,
-      }));
-    }
-
-    return Promise.resolve({ ok: false, error: "Unknown action" });
-  }
-
-  // ——— Google Apps Script API (GET — same as browser test URLs) ———
 
   async function apiCall(action, extra) {
     const eid = requireEventId();
     if (!eid) return { ok: false, error: "Missing event ID." };
 
-    if (isDemo) {
-      return demoApi(action, extra || {}, eid);
+    if (!apiUrl) {
+      return { ok: false, error: "API not configured" };
     }
 
     const base = apiUrl.replace(/\/$/, "");
@@ -302,25 +336,27 @@
   }
 
   function renderEvent(data) {
+    window._lastEventData = data;
+    
     if (!data.ok) {
       els.loading.classList.add("hidden");
       els.mainContent.classList.add("hidden");
       els.noEvent.classList.remove("hidden");
-      els.noEvent.querySelector("p").textContent = data.error || "Event not found.";
+      els.noEvent.querySelector("p").textContent = data.error || t("noEventTitle");
       return;
     }
 
     const ev = data.event;
+    
+    let eventSubtitle = t("maxSpots", { seats: ev.maxSeats });
+    if (ev.opensAt) eventSubtitle += t("opensAt", { time: formatTime(ev.opensAt) });
+    if (ev.closesAt) eventSubtitle += t("closesAt", { time: formatTime(ev.closesAt) });
+    
     els.eventTitle.textContent = ev.title;
-    els.eventSubtitle.textContent =
-      "Max " +
-      ev.maxSeats +
-      " spots · First come, first served" +
-      (ev.opensAt ? " · Opens " + formatTime(ev.opensAt) : "") +
-      (ev.closesAt ? " · Closes " + formatTime(ev.closesAt) : "");
+    els.eventSubtitle.textContent = eventSubtitle;
 
     const open = data.isOpen;
-    els.statusBadge.textContent = open ? "Enrollment open" : "Enrollment closed";
+    els.statusBadge.textContent = open ? t("statusOpen") : t("statusClosed");
     els.statusBadge.className = "badge " + (open ? "open" : "closed");
 
     els.confirmedStat.textContent = data.confirmedCount ?? 0;
@@ -344,34 +380,37 @@
 
     if (myRow) {
       els.myStatus.classList.remove("hidden");
-      els.myStatus.textContent =
-        "Your position: #" +
-        myRow.position +
-        " (" +
-        (myRow.status === "confirmed" ? "confirmed" : "waitlist") +
-        ") · " +
-        formatTime(myRow.enrolledAt);
+      const statusText = myRow.status === "confirmed" ? t("confirmedLabel") : t("waitlistLabel");
+      els.myStatus.textContent = t("yourStatus", {
+        position: myRow.position,
+        status: statusText,
+        time: formatTime(myRow.enrolledAt)
+      });
       els.cancelBtn.classList.remove("hidden");
+      els.cancelBtn.textContent = t("cancelBtn");
     } else if (getToken()) {
       els.myStatus.classList.remove("hidden");
-      els.myStatus.textContent =
-        "You enrolled on this device. Tap Cancel to leave the queue.";
+      els.myStatus.textContent = t("yourStatusDevice");
       els.cancelBtn.classList.remove("hidden");
+      els.cancelBtn.textContent = t("cancelBtn");
     } else {
       els.myStatus.classList.add("hidden");
       els.cancelBtn.classList.add("hidden");
     }
 
     els.enrollBtn.disabled = !open;
+    els.enrollBtn.textContent = t("enrollBtn");
     els.queueList.innerHTML = "";
 
     if (!data.enrollments.length) {
       els.queueEmpty.classList.remove("hidden");
+      els.queueEmpty.textContent = t("emptyQueue");
     } else {
       els.queueEmpty.classList.add("hidden");
       data.enrollments.forEach((row) => {
         const li = document.createElement("li");
         li.className = "queue-item " + row.status;
+        const statusText = row.status === "confirmed" ? t("confirmedLabel") : t("waitlistLabel");
         li.innerHTML =
           '<div class="position">' +
           row.position +
@@ -387,7 +426,7 @@
           '<span class="status-pill ' +
           row.status +
           '">' +
-          (row.status === "confirmed" ? "Confirmed" : "Waitlist") +
+          statusText +
           "</span>" +
           "</div>";
         els.queueList.appendChild(li);
@@ -424,7 +463,7 @@
     const name = els.nameInput.value.trim();
     const phone = els.phoneInput.value.trim();
     if (!name) {
-      showToast("Please enter your name.", "error");
+      showToast(t("errorNameRequired"), "error");
       return;
     }
 
@@ -432,14 +471,15 @@
     try {
       const data = await apiCall("enroll", { name, phone });
       if (!data.ok) {
-        showToast(data.error || "Enrollment failed.", "error");
+        showToast(data.error || t("errorEnrollFailed"), "error");
         return;
       }
       if (data.token) setToken(data.token);
-      showToast(data.message || "Enrolled!", "success");
+      const message = data.enrollment?.status === "waitlist" ? t("successWaitlist") : t("successEnrolled");
+      showToast(message, "success");
       renderEvent(data);
     } catch (err) {
-      showToast(err.message || "Enrollment failed.", "error");
+      showToast(err.message || t("errorEnrollFailed"), "error");
     } finally {
       els.enrollBtn.disabled = false;
     }
@@ -449,47 +489,69 @@
     if (!requireEventId()) return;
     const token = getToken();
     if (!token) {
-      showToast("No enrollment found on this device.", "error");
+      showToast(t("errorNoToken"), "error");
       return;
     }
-    if (!confirm("Cancel your enrollment for this event?")) return;
+    if (!confirm(t("confirmCancel"))) return;
 
     els.cancelBtn.disabled = true;
     try {
       const data = await apiCall("cancel", { token });
       if (!data.ok) {
-        showToast(data.error || "Cancel failed.", "error");
+        showToast(data.error || t("errorCancelFailed"), "error");
         return;
       }
       setToken("");
-      showToast(data.message || "Cancelled.", "success");
+      showToast(t("successCancelled"), "success");
       renderEvent(data);
     } catch (err) {
-      showToast(err.message || "Cancel failed.", "error");
+      showToast(err.message || t("errorCancelFailed"), "error");
     } finally {
       els.cancelBtn.disabled = false;
     }
   }
 
   function init() {
-    if (forceDemo) {
-      els.demoBanner?.classList.remove("hidden");
-    } else if (!apiUrl) {
-      els.demoBanner?.classList.remove("hidden");
-      if (els.configBanner) {
-        els.configBanner.classList.remove("hidden");
-        els.configBanner.textContent =
-          "apiUrl is empty in config.js — enrollments will NOT save to Google Sheet. Add your /exec URL and redeploy.";
+    // Load saved language
+    const savedLang = localStorage.getItem(STORAGE_LANG);
+    if (urlLang === "zh" || urlLang === "zh-CN" || urlLang === "zh-TW" || urlLang === "zh-HK") {
+      currentLang = "zh";
+    } else if (urlLang === "en") {
+      currentLang = "en";
+    } else if (savedLang && translations[savedLang]) {
+      currentLang = savedLang;
+    } else {
+      // Auto-detect browser language
+      const browserLang = navigator.language || navigator.userLanguage;
+      if (browserLang.startsWith("zh")) {
+        currentLang = "zh";
+      } else {
+        currentLang = "en";
       }
-    } else if (els.configBanner) {
-      els.configBanner.classList.add("hidden");
     }
+    
+    // Apply language to UI elements
+    updateUILanguage();
+    
+    // Setup language switcher buttons
+    $$(".lang-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        setLanguage(btn.dataset.lang);
+      });
+    });
 
-    if (!eventId && !forceDemo) {
+    if (!apiUrl) {
+      showToast(t("errorApiNotConfigured"), "error");
       els.loading.classList.add("hidden");
       els.noEvent.classList.remove("hidden");
-      els.noEvent.querySelector("p").textContent =
-        "Add ?e=your-event-id to the URL (e.g. ?e=sat-pickleball).";
+      els.noEvent.querySelector("p").innerHTML = t("noEventConfig");
+      return;
+    }
+
+    if (!eventId) {
+      els.loading.classList.add("hidden");
+      els.noEvent.classList.remove("hidden");
+      els.noEvent.querySelector("p").innerHTML = t("noEventMissing");
       loadProfile();
       return;
     }
@@ -499,15 +561,4 @@
       e.preventDefault();
       enroll();
     });
-    els.cancelBtn.addEventListener("click", cancel);
-    els.refreshBtn.addEventListener("click", refresh);
-    refresh();
-    setInterval(refresh, 30000);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
-})();
+   
