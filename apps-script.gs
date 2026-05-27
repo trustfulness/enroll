@@ -1,13 +1,5 @@
 /**
- * Google Apps Script backend (free).
- *
- * Setup:
- * 1. New Google Sheet → Extensions → Apps Script → paste this file.
- * 2. Run setup() once (authorize). Creates Events + Enrollments sheets.
- * 3. Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone.
- * 4. Copy the /exec URL into config.js as apiUrl.
- *
- * Admin: create events with action=createEvent (see README).
+ * Google Apps Script backend
  */
 
 const SHEET_EVENTS = "Events";
@@ -19,22 +11,10 @@ const FMT_DISPLAY = "d MMM yyyy, HH:mm";
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   getOrCreateSheet_(ss, SHEET_EVENTS, [
-    "eventId",
-    "title",
-    "maxSeats",
-    "opensAt",
-    "closesAt",
-    "active",
-    "createdAt",
+    "eventId", "title", "maxSeats", "opensAt", "closesAt", "active", "createdAt",
   ]);
   getOrCreateSheet_(ss, SHEET_ENROLLMENTS, [
-    "enrollmentId",
-    "eventId",
-    "name",
-    "phone",
-    "enrolledAt",
-    "status",
-    "token",
+    "enrollmentId", "eventId", "name", "phone", "enrolledAt", "status", "token",
   ]);
 }
 
@@ -45,19 +25,13 @@ function doGet(e) {
 function doPost(e) {
   const params = {};
   if (e && e.parameter) {
-    Object.keys(e.parameter).forEach(function (k) {
-      params[k] = e.parameter[k];
-    });
+    Object.keys(e.parameter).forEach(k => params[k] = e.parameter[k]);
   }
   if (e && e.postData && e.postData.contents) {
     try {
       const json = JSON.parse(e.postData.contents);
-      Object.keys(json).forEach(function (k) {
-        params[k] = json[k];
-      });
-    } catch (err) {
-      // ignore non-JSON body
-    }
+      Object.keys(json).forEach(k => params[k] = json[k]);
+    } catch (err) {}
   }
   return handleRequest_(params);
 }
@@ -65,43 +39,42 @@ function doPost(e) {
 function handleRequest_(params) {
   try {
     const action = (params.action || "").toString().toLowerCase();
+    
+    // Debug log
+    console.log("=== REQUEST RECEIVED ===");
+    console.log("Action: " + action);
+    console.log("Params: " + JSON.stringify(params));
+    
     let result;
 
-    switch (action) {
-      case "list":
-        result = listEvent_(params.eventId);
-        break;
-      case "enroll":
-        result = enroll_(params);
-        break;
-      case "cancel":
-        result = cancel_(params);
-        break;
-      case "cancelbyname":
-        result = cancelByName_(params);
-        break;
-      case "createevent":
-        result = createEvent_(params);
-        break;
-      default:
-        result = { ok: false, error: "Unknown action. Use list, enroll, cancel, cancelbyname, or createEvent." };
+    if (action === "list") {
+      result = listEvent_(params.eventId);
+    } else if (action === "enroll") {
+      result = enroll_(params);
+    } else if (action === "cancel") {
+      result = cancel_(params);
+    } else if (action === "cancelbyname") {
+      result = cancelByName_(params);
+    } else if (action === "createevent") {
+      result = createEvent_(params);
+    } else {
+      result = { ok: false, error: "Unknown action: '" + action + "'. Available: list, enroll, cancel, cancelbyname, createevent" };
     }
-
+    
+    console.log("Result: " + JSON.stringify(result));
     return jsonResponse_(result);
   } catch (err) {
+    console.error("Error: " + err.toString());
     return jsonResponse_({ ok: false, error: String(err.message || err) });
   }
 }
 
 function listEvent_(eventId) {
   const event = getEvent_(eventId);
-  if (!event) {
-    return { ok: false, error: "Event not found." };
-  }
+  if (!event) return { ok: false, error: "Event not found." };
 
   const enrollments = getActiveEnrollments_(eventId);
   const maxSeats = Number(event.maxSeats) || 0;
-  const now = new Date();
 
   const list = enrollments.map(function (row, index) {
     const position = index + 1;
@@ -127,13 +100,9 @@ function listEvent_(eventId) {
       active: event.active !== "false" && event.active !== false,
     },
     enrollments: list,
-    confirmedCount: list.filter(function (e) {
-      return e.status === "confirmed";
-    }).length,
-    waitlistCount: list.filter(function (e) {
-      return e.status === "waitlist";
-    }).length,
-    isOpen: isEnrollmentOpen_(event, now),
+    confirmedCount: list.filter(e => e.status === "confirmed").length,
+    waitlistCount: list.filter(e => e.status === "waitlist").length,
+    isOpen: isEnrollmentOpen_(event, new Date()),
   };
 }
 
@@ -147,9 +116,7 @@ function enroll_(params) {
   }
 
   const event = getEvent_(eventId);
-  if (!event) {
-    return { ok: false, error: "Event not found." };
-  }
+  if (!event) return { ok: false, error: "Event not found." };
   if (event.active === "false" || event.active === false) {
     return { ok: false, error: "This event is closed." };
   }
@@ -158,9 +125,7 @@ function enroll_(params) {
   }
 
   const enrollments = getActiveEnrollments_(eventId);
-  const duplicate = enrollments.some(function (row) {
-    return samePerson_(row, name, phone);
-  });
+  const duplicate = enrollments.some(row => samePerson_(row, name, phone));
   if (duplicate) {
     return { ok: false, error: "You are already enrolled for this event." };
   }
@@ -180,9 +145,7 @@ function enroll_(params) {
   });
 
   const updated = listEvent_(eventId);
-  const me = updated.enrollments.find(function (e) {
-    return e.name === name && (phone ? e.phone === phone : true);
-  });
+  const me = updated.enrollments.find(e => e.name === name && (!phone || e.phone === phone));
 
   return {
     ok: true,
@@ -204,33 +167,21 @@ function cancel_(params) {
 
   const sheet = getSheet_(SHEET_ENROLLMENTS);
   const data = sheet.getDataRange().getValues();
-  let found = false;
-  let rowIndex = -1;
 
-  // Column indexes (7 columns total):
-  // 0: enrollmentId, 1: eventId, 2: name, 3: phone, 4: enrolledAt, 5: status, 6: token
   for (let i = 1; i < data.length; i++) {
     if (data[i][1] === eventId && data[i][6] === token && data[i][5] === "active") {
-      rowIndex = i;
-      found = true;
-      break;
+      sheet.getRange(i + 1, 6).setValue("cancelled");
+      const updated = listEvent_(eventId);
+      return {
+        ok: true,
+        message: "Enrollment cancelled. Queue updated.",
+        event: updated.event,
+        enrollments: updated.enrollments,
+      };
     }
   }
 
-  if (!found) {
-    return { ok: false, error: "Enrollment not found or already cancelled." };
-  }
-
-  // Update status to cancelled (column 5 = status, 1-based index = 6)
-  sheet.getRange(rowIndex + 1, 6).setValue("cancelled");
-
-  const updated = listEvent_(eventId);
-  return {
-    ok: true,
-    message: "Enrollment cancelled. Queue updated.",
-    event: updated.event,
-    enrollments: updated.enrollments,
-  };
+  return { ok: false, error: "Enrollment not found or already cancelled." };
 }
 
 function cancelByName_(params) {
@@ -238,53 +189,37 @@ function cancelByName_(params) {
   const name = (params.name || "").toString().trim();
   const phone = (params.phone || "").toString().trim();
 
+  console.log("cancelByName called with:", { eventId, name, phone });
+
   if (!eventId || !name) {
     return { ok: false, error: "eventId and name are required." };
   }
 
   const sheet = getSheet_(SHEET_ENROLLMENTS);
   const data = sheet.getDataRange().getValues();
-  let found = false;
-  let rowIndex = -1;
-  let matchedToken = "";
 
-  // Column indexes (7 columns total):
-  // 0: enrollmentId, 1: eventId, 2: name, 3: phone, 4: enrolledAt, 5: status, 6: token
   for (let i = 1; i < data.length; i++) {
     if (data[i][1] === eventId && data[i][5] === "active") {
       const rowName = data[i][2];
       const rowPhone = data[i][3] || "";
       
-      // Match by name (case-insensitive)
-      const nameMatch = rowName.toLowerCase() === name.toLowerCase();
-      
-      // If phone provided, match by phone too; otherwise just name is enough
-      const phoneMatch = !phone || (rowPhone && rowPhone === phone);
-      
-      if (nameMatch && phoneMatch) {
-        rowIndex = i;
-        matchedToken = data[i][6];
-        found = true;
-        break;
+      // Case-insensitive name match
+      if (rowName.toLowerCase() === name.toLowerCase()) {
+        console.log("Found match at row " + i + ": " + rowName);
+        sheet.getRange(i + 1, 6).setValue("cancelled");
+        const updated = listEvent_(eventId);
+        return {
+          ok: true,
+          message: "Enrollment cancelled. Queue updated.",
+          event: updated.event,
+          enrollments: updated.enrollments,
+        };
       }
     }
   }
 
-  if (!found) {
-    return { ok: false, error: "No active enrollment found for this name." };
-  }
-
-  // Update status to cancelled (column 5 = status, 1-based index = 6)
-  sheet.getRange(rowIndex + 1, 6).setValue("cancelled");
-
-  const updated = listEvent_(eventId);
-  return {
-    ok: true,
-    message: "Enrollment cancelled. Queue updated.",
-    event: updated.event,
-    enrollments: updated.enrollments,
-    cancelledToken: matchedToken,
-  };
+  console.log("No match found for name: " + name);
+  return { ok: false, error: "No active enrollment found for this name." };
 }
 
 function createEvent_(params) {
@@ -295,19 +230,14 @@ function createEvent_(params) {
   const closesAt = (params.closesAt || "").toString().trim();
   const adminKey = (params.adminKey || "").toString();
 
-  const expectedKey = PropertiesService.getScriptProperties().getProperty("ADMIN_KEY");
-  if (!expectedKey) {
-    PropertiesService.getScriptProperties().setProperty(
-      "ADMIN_KEY",
-      Utilities.getUuid().replace(/-/g, "").slice(0, 16)
-    );
-  }
   const key = PropertiesService.getScriptProperties().getProperty("ADMIN_KEY");
-  if (!adminKey || adminKey !== key) {
-    return {
-      ok: false,
-      error: "Invalid admin key. Run getAdminKey() once in the script editor to see your key.",
-    };
+  if (!key) {
+    PropertiesService.getScriptProperties().setProperty("ADMIN_KEY", Utilities.getUuid().replace(/-/g, "").slice(0, 16));
+  }
+  const expectedKey = PropertiesService.getScriptProperties().getProperty("ADMIN_KEY");
+  
+  if (!adminKey || adminKey !== expectedKey) {
+    return { ok: false, error: "Invalid admin key." };
   }
 
   if (!eventId || !title || maxSeats < 1) {
@@ -315,55 +245,40 @@ function createEvent_(params) {
   }
 
   if (getEvent_(eventId)) {
-    return { ok: false, error: "Event ID already exists. Use a different eventId." };
+    return { ok: false, error: "Event ID already exists." };
   }
 
   const sheet = getSheet_(SHEET_EVENTS);
   sheet.appendRow([
-    eventId,
-    title,
-    maxSeats,
+    eventId, title, maxSeats,
     normalizeDateInput_(opensAt),
     normalizeDateInput_(closesAt),
     "true",
     formatDateHK_(new Date()),
   ]);
 
-  return {
-    ok: true,
-    eventId: eventId,
-    enrollUrl: "Share: your-page/index.html?e=" + eventId,
-    message: "Event created.",
-  };
+  return { ok: true, eventId: eventId, message: "Event created." };
 }
 
 function getAdminKey() {
-  const key =
-    PropertiesService.getScriptProperties().getProperty("ADMIN_KEY") ||
-    (function () {
-      const k = Utilities.getUuid().replace(/-/g, "").slice(0, 16);
-      PropertiesService.getScriptProperties().setProperty("ADMIN_KEY", k);
-      return k;
-    })();
+  let key = PropertiesService.getScriptProperties().getProperty("ADMIN_KEY");
+  if (!key) {
+    key = Utilities.getUuid().replace(/-/g, "").slice(0, 16);
+    PropertiesService.getScriptProperties().setProperty("ADMIN_KEY", key);
+  }
   Logger.log("ADMIN_KEY: " + key);
   return key;
 }
 
 function isEnrollmentOpen_(event, now) {
-  if (event.active === "false" || event.active === false) {
-    return false;
-  }
+  if (event.active === "false" || event.active === false) return false;
   if (event.opensAt) {
     const open = parseStoredDate_(event.opensAt);
-    if (open && now < open) {
-      return false;
-    }
+    if (open && now < open) return false;
   }
   if (event.closesAt) {
     const close = parseStoredDate_(event.closesAt);
-    if (close && now > close) {
-      return false;
-    }
+    if (close && now > close) return false;
   }
   return true;
 }
@@ -373,8 +288,6 @@ function getActiveEnrollments_(eventId) {
   const data = sheet.getDataRange().getValues();
   const rows = [];
 
-  // Column indexes (7 columns total):
-  // 0: enrollmentId, 1: eventId, 2: name, 3: phone, 4: enrolledAt, 5: status, 6: token
   for (let i = 1; i < data.length; i++) {
     if (data[i][1] === eventId && data[i][5] === "active") {
       rows.push({
@@ -389,7 +302,7 @@ function getActiveEnrollments_(eventId) {
     }
   }
 
-  rows.sort(function (a, b) {
+  rows.sort((a, b) => {
     const ta = parseStoredDate_(a.enrolledAt);
     const tb = parseStoredDate_(b.enrolledAt);
     return (ta ? ta.getTime() : 0) - (tb ? tb.getTime() : 0);
@@ -419,24 +332,16 @@ function getEvent_(eventId) {
 
 function appendEnrollment_(row) {
   getSheet_(SHEET_ENROLLMENTS).appendRow([
-    row.enrollmentId,
-    row.eventId,
-    row.name,
-    row.phone,
-    row.enrolledAt,
-    row.status,
-    row.token,
+    row.enrollmentId, row.eventId, row.name, row.phone,
+    row.enrolledAt, row.status, row.token,
   ]);
 }
 
 function samePerson_(row, name, phone) {
-  if (phone && row.phone && row.phone === phone) {
-    return true;
-  }
+  if (phone && row.phone && row.phone === phone) return true;
   return row.name.toLowerCase() === name.toLowerCase();
 }
 
-/** Sheet storage: Hong Kong wall-clock time with HKT label */
 function formatDateHK_(date) {
   return Utilities.formatDate(date, TZ_HK, FMT_STORE) + " HKT";
 }
@@ -457,69 +362,30 @@ function normalizeDateInput_(value) {
 function parseStoredDate_(value) {
   if (!value) return null;
   if (value instanceof Date) return value;
-  let s = String(value).trim();
+  let s = String(value).trim().replace(/\s+HKT$/i, "").trim();
   if (!s) return null;
-  s = s.replace(/\s+HKT$/i, "").trim();
   try {
-    if (s.indexOf("T") >= 0 || s.indexOf("Z") >= 0) {
-      const iso = new Date(s);
-      if (!isNaN(iso.getTime())) return iso;
-    }
+    const iso = new Date(s);
+    if (!isNaN(iso.getTime())) return iso;
   } catch (err) {}
   try {
     return Utilities.parseDate(s, TZ_HK, FMT_STORE);
-  } catch (err2) {}
+  } catch (err) {}
   try {
     return Utilities.parseDate(s, TZ_HK, FMT_DISPLAY);
-  } catch (err3) {}
-  try {
-    const fallback = new Date(s);
-    if (!isNaN(fallback.getTime())) return fallback;
-  } catch (err4) {}
+  } catch (err) {}
   return null;
 }
 
-/**
- * Run once in Apps Script editor to convert existing ISO dates in the sheet to HKT.
- * Extensions → Apps Script → select migrateSheetDatesToHK → Run
- */
-function migrateSheetDatesToHK() {
-  migrateColumn_(SHEET_EVENTS, 4); // opensAt
-  migrateColumn_(SHEET_EVENTS, 5); // closesAt
-  migrateColumn_(SHEET_EVENTS, 7); // createdAt
-  migrateColumn_(SHEET_ENROLLMENTS, 5); // enrolledAt (column E, index 5)
-  Logger.log("Migration complete. Dates are now stored as yyyy-MM-dd HH:mm:ss HKT");
-}
-
-function migrateColumn_(sheetName, col1Based) {
-  const sheet = getSheet_(sheetName);
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return;
-  const values = sheet.getRange(2, col1Based, lastRow - 1, 1).getValues();
-  for (let i = 0; i < values.length; i++) {
-    const val = values[i][0];
-    if (!val) continue;
-    const d = parseStoredDate_(val);
-    if (!d) continue;
-    const formatted = formatDateHK_(d);
-    if (String(val).trim() !== formatted) {
-      sheet.getRange(i + 2, col1Based).setValue(formatted);
-    }
-  }
-}
-
 function jsonResponse_(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
-    ContentService.MimeType.JSON
-  );
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function getSheet_(name) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(name);
-  if (!sheet) {
-    throw new Error('Sheet "' + name + '" not found. Run setup() first.');
-  }
+  if (!sheet) throw new Error('Sheet "' + name + '" not found. Run setup() first.');
   return sheet;
 }
 
@@ -532,72 +398,10 @@ function getOrCreateSheet_(ss, name, headers) {
   return sheet;
 }
 
-/**
- * Debug function - run this to check your sheet structure
- */
 function debugSheetStructure() {
   const sheet = getSheet_(SHEET_ENROLLMENTS);
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   Logger.log("=== ENROLLMENTS SHEET STRUCTURE ===");
-  Logger.log("Number of columns: " + sheet.getLastColumn());
+  Logger.log("Columns: " + sheet.getLastColumn());
   Logger.log("Headers: " + JSON.stringify(headers));
-  
-  const data = sheet.getDataRange().getValues();
-  Logger.log("Total rows (including header): " + data.length);
-  if (data.length > 1) {
-    Logger.log("First data row example:");
-    Logger.log("  enrollmentId: " + data[1][0]);
-    Logger.log("  eventId: " + data[1][1]);
-    Logger.log("  name: " + data[1][2]);
-    Logger.log("  phone: " + data[1][3]);
-    Logger.log("  enrolledAt: " + data[1][4]);
-    Logger.log("  status: " + data[1][5]);
-    Logger.log("  token: " + data[1][6]);
-  }
-  
-  // Count active enrollments for debugging
-  let activeCount = 0;
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][5] === "active") activeCount++;
-  }
-  Logger.log("Total active enrollments: " + activeCount);
-}
-
-/**
- * List all active enrollments for an event - useful for debugging
- */
-function listActiveEnrollments(eventId) {
-  const eId = eventId || "basketball-Chaiwan-May27";
-  const sheet = getSheet_(SHEET_ENROLLMENTS);
-  const data = sheet.getDataRange().getValues();
-  
-  Logger.log("=== ACTIVE ENROLLMENTS FOR " + eId + " ===");
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][1] === eId && data[i][5] === "active") {
-      Logger.log("Name: %s, Phone: %s, Token: %s, EnrolledAt: %s", 
-        data[i][2], data[i][3], data[i][6], data[i][4]);
-    }
-  }
-}
-
-/**
- * Force cancel by name - use this in Apps Script if needed
- */
-function forceCancelByName() {
-  const eventId = "basketball-Chaiwan-May27";
-  const name = "YOUR_NAME_HERE"; // Change this to the name you want to cancel
-  const phone = ""; // Add phone if needed
-  
-  const sheet = getSheet_(SHEET_ENROLLMENTS);
-  const data = sheet.getDataRange().getValues();
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][1] === eventId && data[i][2] === name && data[i][5] === "active") {
-      sheet.getRange(i + 1, 6).setValue("cancelled");
-      Logger.log("Cancelled enrollment for: " + name);
-      Logger.log("Row: " + (i + 1) + ", Token: " + data[i][6]);
-      return;
-    }
-  }
-  Logger.log("No active enrollment found for: " + name);
 }
