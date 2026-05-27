@@ -561,4 +561,15 @@
       e.preventDefault();
       enroll();
     });
-   
+    els.cancelBtn.addEventListener("click", cancel);
+    els.refreshBtn.addEventListener("click", refresh);
+    refresh();
+    setInterval(refresh, 30000);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
