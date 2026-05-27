@@ -202,10 +202,13 @@ function cancel_(params) {
   const sheet = getSheet_(SHEET_ENROLLMENTS);
   const data = sheet.getDataRange().getValues();
   let found = false;
+  let rowIndex = -1;
 
+  // Column indexes (7 columns total):
+  // 0: enrollmentId, 1: eventId, 2: name, 3: phone, 4: enrolledAt, 5: status, 6: token
   for (let i = 1; i < data.length; i++) {
-    if (data[i][1] === eventId && data[i][7] === token && data[i][6] === "active") {
-      sheet.getRange(i + 1, 7).setValue("cancelled");
+    if (data[i][1] === eventId && data[i][6] === token && data[i][5] === "active") {
+      rowIndex = i;
       found = true;
       break;
     }
@@ -214,6 +217,9 @@ function cancel_(params) {
   if (!found) {
     return { ok: false, error: "Enrollment not found or already cancelled." };
   }
+
+  // Update status to cancelled (column 5 = status, 1-based index = 6)
+  sheet.getRange(rowIndex + 1, 6).setValue("cancelled");
 
   const updated = listEvent_(eventId);
   return {
@@ -310,6 +316,8 @@ function getActiveEnrollments_(eventId) {
   const data = sheet.getDataRange().getValues();
   const rows = [];
 
+  // Column indexes (7 columns total):
+  // 0: enrollmentId, 1: eventId, 2: name, 3: phone, 4: enrolledAt, 5: status, 6: token
   for (let i = 1; i < data.length; i++) {
     if (data[i][1] === eventId && data[i][5] === "active") {
       rows.push({
@@ -422,7 +430,7 @@ function migrateSheetDatesToHK() {
   migrateColumn_(SHEET_EVENTS, 4); // opensAt
   migrateColumn_(SHEET_EVENTS, 5); // closesAt
   migrateColumn_(SHEET_EVENTS, 7); // createdAt
-  migrateColumn_(SHEET_ENROLLMENTS, 6); // enrolledAt
+  migrateColumn_(SHEET_ENROLLMENTS, 5); // enrolledAt (column E, index 5)
   Logger.log("Migration complete. Dates are now stored as yyyy-MM-dd HH:mm:ss HKT");
 }
 
@@ -465,4 +473,35 @@ function getOrCreateSheet_(ss, name, headers) {
     sheet.appendRow(headers);
   }
   return sheet;
+}
+
+/**
+ * Debug function - run this to check your sheet structure
+ */
+function debugSheetStructure() {
+  const sheet = getSheet_(SHEET_ENROLLMENTS);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  Logger.log("=== ENROLLMENTS SHEET STRUCTURE ===");
+  Logger.log("Number of columns: " + sheet.getLastColumn());
+  Logger.log("Headers: " + JSON.stringify(headers));
+  
+  const data = sheet.getDataRange().getValues();
+  Logger.log("Total rows (including header): " + data.length);
+  if (data.length > 1) {
+    Logger.log("First data row example:");
+    Logger.log("  enrollmentId: " + data[1][0]);
+    Logger.log("  eventId: " + data[1][1]);
+    Logger.log("  name: " + data[1][2]);
+    Logger.log("  phone: " + data[1][3]);
+    Logger.log("  enrolledAt: " + data[1][4]);
+    Logger.log("  status: " + data[1][5]);
+    Logger.log("  token: " + data[1][6]);
+  }
+  
+  // Count active enrollments for debugging
+  let activeCount = 0;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][5] === "active") activeCount++;
+  }
+  Logger.log("Total active enrollments: " + activeCount);
 }
