@@ -34,8 +34,14 @@ For a real group, complete the Google Apps Script setup below.
    ```
 
 2. Host the folder (pick one):
-   - **GitHub Pages**: push `event-enroll/` to a repo → Settings → Pages → folder `/event-enroll`
+   - **GitHub Pages**: push `enroll/` to a repo → Settings → Pages → folder `/enroll`
+   
+Remember to change the branch from none to main and select folder to /root; otherwise /enroll will not be accessible 
+   
    - **Open locally** for testing only (members on other phones won’t share demo data)
+
+
+   
 
 ### 3. Create an event
 
@@ -64,7 +70,7 @@ Post in your group:
 ```
 🏀 Pickup Sat 7pm — max 10 players
 Enroll (first come, first served):
-https://YOUR_USERNAME.github.io/event-enroll/?e=sat-basketball
+https://YOUR_USERNAME.github.io/enroll/?e=sat-basketball
 ```
 
 Pin the message. Members open the link on their phone, enroll, and see the live queue.
