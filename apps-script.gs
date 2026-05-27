@@ -1,5 +1,6 @@
 /**
  * Google Apps Script backend with 4-digit password security
+ * Passwords are stored as TEXT (not numbers) to ensure proper matching
  */
 
 const SHEET_EVENTS = "Events";
@@ -16,6 +17,13 @@ function setup() {
   getOrCreateSheet_(ss, SHEET_ENROLLMENTS, [
     "enrollmentId", "eventId", "name", "password", "enrolledAt", "status", "token",
   ]);
+  
+  // Format password column as plain text
+  const enrollSheet = ss.getSheetByName(SHEET_ENROLLMENTS);
+  if (enrollSheet) {
+    enrollSheet.getRange("D:D").setNumberFormat("@");
+    Logger.log("Password column formatted as Plain Text");
+  }
 }
 
 function doGet(e) {
@@ -39,7 +47,6 @@ function doPost(e) {
 function handleRequest_(params) {
   try {
     const action = (params.action || "").toString().toLowerCase();
-    
     let result;
 
     if (action === "list") {
@@ -135,7 +142,7 @@ function enroll_(params) {
     enrollmentId: enrollmentId,
     eventId: eventId,
     name: name,
-    password: password,
+    password: password,  // Will be stored as text via appendEnrollment_
     enrolledAt: enrolledAt,
     status: "active",
     token: token,
@@ -148,7 +155,7 @@ function enroll_(params) {
     ok: true,
     token: token,
     enrollment: me,
-    message: me && me.status === "waitlist" ? "Added to waitlist." : "You are enrolled.",
+    message: me && me.status === "waitlist" ? "Added to waitlist." : "You are enrolled. Remember your 4-digit password!",
     event: updated.event,
     enrollments: updated.enrollments,
   };
@@ -184,13 +191,13 @@ function cancel_(params) {
 function cancelByName_(params) {
   const eventId = (params.eventId || "").toString().trim();
   const name = (params.name || "").toString().trim();
-  const password = (params.password || "").toString().trim();
+  const inputPassword = (params.password || "").toString().trim();
 
   if (!eventId || !name) {
     return { ok: false, error: "eventId and name are required." };
   }
   
-  if (!password || password.length !== 4 || !/^\d{4}$/.test(password)) {
+  if (!inputPassword || inputPassword.length !== 4 || !/^\d{4}$/.test(inputPassword)) {
     return { ok: false, error: "Password must be exactly 4 digits." };
   }
 
@@ -202,8 +209,10 @@ function cancelByName_(params) {
       const rowName = data[i][2];
       const rowPassword = data[i][3];
       
-      // Match by name (case-insensitive) AND password
-      if (rowName.toLowerCase() === name.toLowerCase() && rowPassword === password) {
+      // Convert stored password to string for comparison (handles both text and numbers)
+      const storedPasswordStr = String(rowPassword);
+      
+      if (rowName.toLowerCase() === name.toLowerCase() && storedPasswordStr === inputPassword) {
         sheet.getRange(i + 1, 6).setValue("cancelled");
         const updated = listEvent_(eventId);
         return {
@@ -291,7 +300,7 @@ function getActiveEnrollments_(eventId) {
         enrollmentId: data[i][0],
         eventId: data[i][1],
         name: data[i][2],
-        password: data[i][3],  // Password kept for verification but not sent to frontend
+        password: data[i][3],
         enrolledAt: data[i][4],
         status: data[i][5],
         token: data[i][6],
@@ -328,9 +337,20 @@ function getEvent_(eventId) {
 }
 
 function appendEnrollment_(row) {
-  getSheet_(SHEET_ENROLLMENTS).appendRow([
-    row.enrollmentId, row.eventId, row.name, row.password,
-    row.enrolledAt, row.status, row.token,
+  const sheet = getSheet_(SHEET_ENROLLMENTS);
+  
+  // Ensure password column is formatted as plain text
+  sheet.getRange("D:D").setNumberFormat("@");
+  
+  // Append row with apostrophe to force text storage
+  sheet.appendRow([
+    row.enrollmentId,
+    row.eventId,
+    row.name,
+    "'" + row.password,  // Apostrophe forces Google Sheets to store as text
+    row.enrolledAt,
+    row.status,
+    row.token,
   ]);
 }
 
@@ -390,16 +410,63 @@ function getOrCreateSheet_(ss, name, headers) {
   return sheet;
 }
 
-function migratePasswordColumn() {
-  // Run this once to rename 'phone' column to 'password' if needed
+// ============ MAINTENANCE FUNCTIONS ============
+
+/**
+ * Run this ONCE to fix existing passwords to text format
+ */
+function fixExistingPasswordsToText() {
   const sheet = getSheet_(SHEET_ENROLLMENTS);
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   
-  for (let i = 0; i < headers.length; i++) {
-    if (headers[i] === "phone") {
-      sheet.getRange(1, i + 1).setValue("password");
-      Logger.log("Renamed 'phone' column to 'password'");
-      break;
+  // Format column D as plain text
+  sheet.getRange("D:D").setNumberFormat("@");
+  
+  const lastRow = sheet.getLastRow();
+  let fixedCount = 0;
+  
+  for (let i = 2; i <= lastRow; i++) {
+    const cell = sheet.getRange(i, 4);
+    const value = cell.getValue();
+    
+    // If it's a number, convert to text
+    if (typeof value === 'number') {
+      const textValue = value.toString();
+      cell.setValue("'" + textValue);
+      fixedCount++;
+      Logger.log("Row " + i + ": Converted " + value + " to text");
     }
   }
+  
+  Logger.log("Fixed " + fixedCount + " passwords. All now stored as text.");
+}
+
+/**
+ * Verify password storage type
+ */
+function verifyPasswordStorage() {
+  const sheet = getSheet_(SHEET_ENROLLMENTS);
+  const data = sheet.getDataRange().getValues();
+  
+  Logger.log("=== PASSWORD STORAGE VERIFICATION ===");
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][5] === "active") {
+      const pwd = data[i][3];
+      Logger.log("Name: " + data[i][2]);
+      Logger.log("  Password: '" + pwd + "'");
+      Logger.log("  Type: " + typeof pwd);
+      Logger.log("  Is String: " + (typeof pwd === 'string'));
+    }
+  }
+}
+
+/**
+ * Debug - check sheet structure
+ */
+function debugSheetStructure() {
+  const sheet = getSheet_(SHEET_ENROLLMENTS);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  Logger.log("=== ENROLLMENTS SHEET STRUCTURE ===");
+  Logger.log("Columns: " + sheet.getLastColumn());
+  Logger.log("Headers: " + JSON.stringify(headers));
+  Logger.log("Column D format: " + sheet.getRange("D:D").getNumberFormat());
 }
