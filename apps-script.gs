@@ -1,5 +1,5 @@
 /**
- * Google Apps Script backend
+ * Google Apps Script backend with 4-digit password security
  */
 
 const SHEET_EVENTS = "Events";
@@ -14,7 +14,7 @@ function setup() {
     "eventId", "title", "maxSeats", "opensAt", "closesAt", "active", "createdAt",
   ]);
   getOrCreateSheet_(ss, SHEET_ENROLLMENTS, [
-    "enrollmentId", "eventId", "name", "phone", "enrolledAt", "status", "token",
+    "enrollmentId", "eventId", "name", "password", "enrolledAt", "status", "token",
   ]);
 }
 
@@ -40,11 +40,6 @@ function handleRequest_(params) {
   try {
     const action = (params.action || "").toString().toLowerCase();
     
-    // Debug log
-    console.log("=== REQUEST RECEIVED ===");
-    console.log("Action: " + action);
-    console.log("Params: " + JSON.stringify(params));
-    
     let result;
 
     if (action === "list") {
@@ -58,13 +53,11 @@ function handleRequest_(params) {
     } else if (action === "createevent") {
       result = createEvent_(params);
     } else {
-      result = { ok: false, error: "Unknown action: '" + action + "'. Available: list, enroll, cancel, cancelbyname, createevent" };
+      result = { ok: false, error: "Unknown action." };
     }
     
-    console.log("Result: " + JSON.stringify(result));
     return jsonResponse_(result);
   } catch (err) {
-    console.error("Error: " + err.toString());
     return jsonResponse_({ ok: false, error: String(err.message || err) });
   }
 }
@@ -76,13 +69,13 @@ function listEvent_(eventId) {
   const enrollments = getActiveEnrollments_(eventId);
   const maxSeats = Number(event.maxSeats) || 0;
 
+  // Password is NOT included in the list - only name and time
   const list = enrollments.map(function (row, index) {
     const position = index + 1;
     const confirmed = maxSeats > 0 ? position <= maxSeats : true;
     return {
       position: position,
       name: row.name,
-      phone: row.phone || "",
       enrolledAt: formatDateHKDisplay_(row.enrolledAt),
       status: confirmed ? "confirmed" : "waitlist",
     };
@@ -109,10 +102,14 @@ function listEvent_(eventId) {
 function enroll_(params) {
   const eventId = (params.eventId || "").toString().trim();
   const name = (params.name || "").toString().trim();
-  const phone = (params.phone || "").toString().trim();
+  const password = (params.password || "").toString().trim();
 
   if (!eventId || !name) {
     return { ok: false, error: "eventId and name are required." };
+  }
+  
+  if (!password || password.length !== 4 || !/^\d{4}$/.test(password)) {
+    return { ok: false, error: "Password must be exactly 4 digits." };
   }
 
   const event = getEvent_(eventId);
@@ -125,7 +122,7 @@ function enroll_(params) {
   }
 
   const enrollments = getActiveEnrollments_(eventId);
-  const duplicate = enrollments.some(row => samePerson_(row, name, phone));
+  const duplicate = enrollments.some(row => row.name.toLowerCase() === name.toLowerCase());
   if (duplicate) {
     return { ok: false, error: "You are already enrolled for this event." };
   }
@@ -138,14 +135,14 @@ function enroll_(params) {
     enrollmentId: enrollmentId,
     eventId: eventId,
     name: name,
-    phone: phone,
+    password: password,
     enrolledAt: enrolledAt,
     status: "active",
     token: token,
   });
 
   const updated = listEvent_(eventId);
-  const me = updated.enrollments.find(e => e.name === name && (!phone || e.phone === phone));
+  const me = updated.enrollments.find(e => e.name === name);
 
   return {
     ok: true,
@@ -174,7 +171,7 @@ function cancel_(params) {
       const updated = listEvent_(eventId);
       return {
         ok: true,
-        message: "Enrollment cancelled. Queue updated.",
+        message: "Enrollment cancelled.",
         event: updated.event,
         enrollments: updated.enrollments,
       };
@@ -187,12 +184,14 @@ function cancel_(params) {
 function cancelByName_(params) {
   const eventId = (params.eventId || "").toString().trim();
   const name = (params.name || "").toString().trim();
-  const phone = (params.phone || "").toString().trim();
-
-  console.log("cancelByName called with:", { eventId, name, phone });
+  const password = (params.password || "").toString().trim();
 
   if (!eventId || !name) {
     return { ok: false, error: "eventId and name are required." };
+  }
+  
+  if (!password || password.length !== 4 || !/^\d{4}$/.test(password)) {
+    return { ok: false, error: "Password must be exactly 4 digits." };
   }
 
   const sheet = getSheet_(SHEET_ENROLLMENTS);
@@ -201,16 +200,15 @@ function cancelByName_(params) {
   for (let i = 1; i < data.length; i++) {
     if (data[i][1] === eventId && data[i][5] === "active") {
       const rowName = data[i][2];
-      const rowPhone = data[i][3] || "";
+      const rowPassword = data[i][3];
       
-      // Case-insensitive name match
-      if (rowName.toLowerCase() === name.toLowerCase()) {
-        console.log("Found match at row " + i + ": " + rowName);
+      // Match by name (case-insensitive) AND password
+      if (rowName.toLowerCase() === name.toLowerCase() && rowPassword === password) {
         sheet.getRange(i + 1, 6).setValue("cancelled");
         const updated = listEvent_(eventId);
         return {
           ok: true,
-          message: "Enrollment cancelled. Queue updated.",
+          message: "Enrollment cancelled.",
           event: updated.event,
           enrollments: updated.enrollments,
         };
@@ -218,8 +216,7 @@ function cancelByName_(params) {
     }
   }
 
-  console.log("No match found for name: " + name);
-  return { ok: false, error: "No active enrollment found for this name." };
+  return { ok: false, error: "No active enrollment found with matching name and password." };
 }
 
 function createEvent_(params) {
@@ -294,7 +291,7 @@ function getActiveEnrollments_(eventId) {
         enrollmentId: data[i][0],
         eventId: data[i][1],
         name: data[i][2],
-        phone: data[i][3] || "",
+        password: data[i][3],  // Password kept for verification but not sent to frontend
         enrolledAt: data[i][4],
         status: data[i][5],
         token: data[i][6],
@@ -332,14 +329,9 @@ function getEvent_(eventId) {
 
 function appendEnrollment_(row) {
   getSheet_(SHEET_ENROLLMENTS).appendRow([
-    row.enrollmentId, row.eventId, row.name, row.phone,
+    row.enrollmentId, row.eventId, row.name, row.password,
     row.enrolledAt, row.status, row.token,
   ]);
-}
-
-function samePerson_(row, name, phone) {
-  if (phone && row.phone && row.phone === phone) return true;
-  return row.name.toLowerCase() === name.toLowerCase();
 }
 
 function formatDateHK_(date) {
@@ -398,10 +390,16 @@ function getOrCreateSheet_(ss, name, headers) {
   return sheet;
 }
 
-function debugSheetStructure() {
+function migratePasswordColumn() {
+  // Run this once to rename 'phone' column to 'password' if needed
   const sheet = getSheet_(SHEET_ENROLLMENTS);
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  Logger.log("=== ENROLLMENTS SHEET STRUCTURE ===");
-  Logger.log("Columns: " + sheet.getLastColumn());
-  Logger.log("Headers: " + JSON.stringify(headers));
+  
+  for (let i = 0; i < headers.length; i++) {
+    if (headers[i] === "phone") {
+      sheet.getRange(1, i + 1).setValue("password");
+      Logger.log("Renamed 'phone' column to 'password'");
+      break;
+    }
+  }
 }
