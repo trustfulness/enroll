@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-HK">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -16,13 +16,13 @@
         <div class="badge-row">
           <span class="badge" id="statusBadge">…</span>
         </div>
+        
+        <!-- Language Switcher -->
+        <div class="lang-switch">
+          <button class="lang-btn active" data-lang="en">English</button>
+          <button class="lang-btn" data-lang="zh">繁體中文</button>
+        </div>
       </header>
-
-      <p id="demoBanner" class="demo-banner hidden">
-        Demo mode — data stays in this browser only. Set up Google Apps Script for real group use (see README).
-      </p>
-
-      <p id="configBanner" class="demo-banner hidden"></p>
 
       <div id="loading" class="loading">Loading enrollment list…</div>
 
@@ -33,7 +33,7 @@
 
       <div id="mainContent" class="hidden">
         <div class="card">
-          <p class="rule">
+          <p class="rule" id="ruleText">
             Fair rule: order is by enrollment <strong>time on this page</strong>. Everyone sees the same list.
             Cancel if you cannot attend so the next person can move up.
           </p>
@@ -41,22 +41,22 @@
           <div class="stats">
             <div class="stat">
               <div class="value" id="confirmedStat">0</div>
-              <div class="label">Confirmed</div>
+              <div class="label" id="confirmedLabel">Confirmed</div>
             </div>
             <div class="stat">
               <div class="value" id="waitlistStat">0</div>
-              <div class="label">Waitlist</div>
+              <div class="label" id="waitlistLabel">Waitlist</div>
             </div>
           </div>
 
           <p id="myStatus" class="queue-meta hidden"></p>
 
-          <h2>Enroll</h2>
+          <h2 id="enrollTitle">Enroll</h2>
           <form id="enrollForm">
-            <label for="name">Your name *</label>
+            <label for="name" id="nameLabel">Your name *</label>
             <input id="name" name="name" type="text" required autocomplete="name" placeholder="e.g. Alex" />
 
-            <label for="phone">Phone (optional, helps identify you)</label>
+            <label for="phone" id="phoneLabel">Phone (optional, helps identify you)</label>
             <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="e.g. 9123 4567" />
 
             <div class="btn-row">
@@ -68,7 +68,7 @@
 
         <div class="card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
-            <h2 style="margin: 0">Queue</h2>
+            <h2 id="queueTitle" style="margin: 0">Queue</h2>
             <button type="button" class="btn-secondary" id="refreshBtn" style="flex: 0; min-width: auto; padding: 0.4rem 0.75rem; font-size: 0.85rem">
               Refresh
             </button>
@@ -78,7 +78,7 @@
         </div>
       </div>
 
-      <footer>
+      <footer id="footer">
         Share this page in your WhatsApp group · Auto-refreshes every 30s
       </footer>
     </div>
