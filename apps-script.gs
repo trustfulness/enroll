@@ -77,11 +77,14 @@ function handleRequest_(params) {
       case "cancel":
         result = cancel_(params);
         break;
+      case "cancelbyname":
+        result = cancelByName_(params);
+        break;
       case "createevent":
         result = createEvent_(params);
         break;
       default:
-        result = { ok: false, error: "Unknown action. Use list, enroll, cancel, or createEvent." };
+        result = { ok: false, error: "Unknown action. Use list, enroll, cancel, cancelbyname, or createEvent." };
     }
 
     return jsonResponse_(result);
@@ -227,6 +230,60 @@ function cancel_(params) {
     message: "Enrollment cancelled. Queue updated.",
     event: updated.event,
     enrollments: updated.enrollments,
+  };
+}
+
+function cancelByName_(params) {
+  const eventId = (params.eventId || "").toString().trim();
+  const name = (params.name || "").toString().trim();
+  const phone = (params.phone || "").toString().trim();
+
+  if (!eventId || !name) {
+    return { ok: false, error: "eventId and name are required." };
+  }
+
+  const sheet = getSheet_(SHEET_ENROLLMENTS);
+  const data = sheet.getDataRange().getValues();
+  let found = false;
+  let rowIndex = -1;
+  let matchedToken = "";
+
+  // Column indexes (7 columns total):
+  // 0: enrollmentId, 1: eventId, 2: name, 3: phone, 4: enrolledAt, 5: status, 6: token
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === eventId && data[i][5] === "active") {
+      const rowName = data[i][2];
+      const rowPhone = data[i][3] || "";
+      
+      // Match by name (case-insensitive)
+      const nameMatch = rowName.toLowerCase() === name.toLowerCase();
+      
+      // If phone provided, match by phone too; otherwise just name is enough
+      const phoneMatch = !phone || (rowPhone && rowPhone === phone);
+      
+      if (nameMatch && phoneMatch) {
+        rowIndex = i;
+        matchedToken = data[i][6];
+        found = true;
+        break;
+      }
+    }
+  }
+
+  if (!found) {
+    return { ok: false, error: "No active enrollment found for this name." };
+  }
+
+  // Update status to cancelled (column 5 = status, 1-based index = 6)
+  sheet.getRange(rowIndex + 1, 6).setValue("cancelled");
+
+  const updated = listEvent_(eventId);
+  return {
+    ok: true,
+    message: "Enrollment cancelled. Queue updated.",
+    event: updated.event,
+    enrollments: updated.enrollments,
+    cancelledToken: matchedToken,
   };
 }
 
@@ -504,4 +561,43 @@ function debugSheetStructure() {
     if (data[i][5] === "active") activeCount++;
   }
   Logger.log("Total active enrollments: " + activeCount);
+}
+
+/**
+ * List all active enrollments for an event - useful for debugging
+ */
+function listActiveEnrollments(eventId) {
+  const eId = eventId || "basketball-Chaiwan-May27";
+  const sheet = getSheet_(SHEET_ENROLLMENTS);
+  const data = sheet.getDataRange().getValues();
+  
+  Logger.log("=== ACTIVE ENROLLMENTS FOR " + eId + " ===");
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === eId && data[i][5] === "active") {
+      Logger.log("Name: %s, Phone: %s, Token: %s, EnrolledAt: %s", 
+        data[i][2], data[i][3], data[i][6], data[i][4]);
+    }
+  }
+}
+
+/**
+ * Force cancel by name - use this in Apps Script if needed
+ */
+function forceCancelByName() {
+  const eventId = "basketball-Chaiwan-May27";
+  const name = "YOUR_NAME_HERE"; // Change this to the name you want to cancel
+  const phone = ""; // Add phone if needed
+  
+  const sheet = getSheet_(SHEET_ENROLLMENTS);
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === eventId && data[i][2] === name && data[i][5] === "active") {
+      sheet.getRange(i + 1, 6).setValue("cancelled");
+      Logger.log("Cancelled enrollment for: " + name);
+      Logger.log("Row: " + (i + 1) + ", Token: " + data[i][6]);
+      return;
+    }
+  }
+  Logger.log("No active enrollment found for: " + name);
 }
