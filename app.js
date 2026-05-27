@@ -35,6 +35,10 @@
       phonePlaceholder: "e.g. 9123 4567",
       enrollBtn: "Enroll",
       cancelBtn: "Cancel my spot",
+      cancelByNamePlaceholder: "Enter your full name",
+      cancelByNameBtn: "Cancel by Name",
+      cancelByNameTitle: "Cancel by Name",
+      cancelByNamePrompt: "Enter your full name to cancel:",
       errorNameRequired: "Please enter your name.",
       errorEnrollFailed: "Enrollment failed.",
       errorCancelFailed: "Cancel failed.",
@@ -43,7 +47,10 @@
       errorNotOpen: "Enrollment is not open right now.",
       errorNoToken: "No enrollment found on this device.",
       errorApiNotConfigured: "API not configured. Please contact organizer.",
+      errorNameRequiredForCancel: "Please enter your name to cancel.",
+      errorNoActiveEnrollment: "No active enrollment found for this name.",
       confirmCancel: "Cancel your enrollment for this event?",
+      confirmCancelByName: "Are you sure you want to cancel enrollment for '{{name}}'?",
       successEnrolled: "Enrolled!",
       successWaitlist: "Added to waitlist.",
       successCancelled: "Enrollment cancelled.",
@@ -52,6 +59,7 @@
       maxSpots: "Max {{seats}} spots · First come, first served",
       opensAt: " · Opens {{time}}",
       closesAt: " · Closes {{time}}",
+      havingTrouble: "Having trouble canceling? Cancel by entering your name below:",
     },
     zh: {
       loading: "載入報名名單中…",
@@ -75,6 +83,10 @@
       phonePlaceholder: "例如：91234567",
       enrollBtn: "報名",
       cancelBtn: "取消我的名額",
+      cancelByNamePlaceholder: "請輸入您的全名",
+      cancelByNameBtn: "以姓名取消",
+      cancelByNameTitle: "以姓名取消",
+      cancelByNamePrompt: "請輸入您的全名以取消報名：",
       errorNameRequired: "請輸入您的姓名。",
       errorEnrollFailed: "報名失敗。",
       errorCancelFailed: "取消失敗。",
@@ -83,7 +95,10 @@
       errorNotOpen: "目前不在報名開放時間。",
       errorNoToken: "此裝置上未找到報名記錄。",
       errorApiNotConfigured: "系統未配置，請聯繫活動組織者。",
+      errorNameRequiredForCancel: "請輸入您的姓名以取消報名。",
+      errorNoActiveEnrollment: "找不到此姓名的有效報名記錄。",
       confirmCancel: "確定取消您的報名名額嗎？",
+      confirmCancelByName: "確定要取消『{{name}}』的報名嗎？",
       successEnrolled: "報名成功！",
       successWaitlist: "已加入候補名單。",
       successCancelled: "已取消報名。",
@@ -92,6 +107,7 @@
       maxSpots: "最多 {{seats}} 個名額 · 先到先得",
       opensAt: " · 開放時間 {{time}}",
       closesAt: " · 截止時間 {{time}}",
+      havingTrouble: "取消遇到問題？請在下方輸入您的姓名以取消：",
     }
   };
 
@@ -109,6 +125,8 @@
     phoneInput: $("#phone"),
     enrollBtn: $("#enrollBtn"),
     cancelBtn: $("#cancelBtn"),
+    cancelByNameBtn: $("#cancelByNameBtn"),
+    cancelNameInput: $("#cancelNameInput"),
     refreshBtn: $("#refreshBtn"),
     queueList: $("#queueList"),
     queueEmpty: $("#queueEmpty"),
@@ -137,7 +155,6 @@
   }
 
   function updateUILanguage() {
-    // Update static text elements
     if (els.queueTitle) els.queueTitle.textContent = t("queueTitle");
     if (els.enrollTitle) els.enrollTitle.textContent = t("enrollTitle");
     if (els.ruleText) els.ruleText.innerHTML = t("ruleText");
@@ -149,20 +166,22 @@
     if (els.footer) els.footer.innerHTML = t("footer");
     if (els.confirmedLabel) els.confirmedLabel.textContent = t("confirmedLabel");
     if (els.waitlistLabel) els.waitlistLabel.textContent = t("waitlistLabel");
+    if (els.cancelByNameBtn) els.cancelByNameBtn.textContent = t("cancelByNameBtn");
+    if (els.cancelNameInput) els.cancelNameInput.placeholder = t("cancelByNamePlaceholder");
     
-    // Update placeholders
     if (els.nameInput) els.nameInput.placeholder = t("namePlaceholder");
     if (els.phoneInput) els.phoneInput.placeholder = t("phonePlaceholder");
     
-    // Update empty queue message
     if (els.queueEmpty) els.queueEmpty.textContent = t("emptyQueue");
     
-    // Update loading and no-event messages
     if (els.loading && els.loading.classList.contains("hidden") === false) {
       els.loading.textContent = t("loading");
     }
     
-    // Update active class on language buttons
+    // Update having trouble text
+    const havingTroubleEl = $(".cancel-help-text");
+    if (havingTroubleEl) havingTroubleEl.textContent = t("havingTrouble");
+    
     const langBtns = $$(".lang-btn");
     langBtns.forEach(btn => {
       if (btn.dataset.lang === currentLang) {
@@ -179,7 +198,6 @@
       localStorage.setItem(STORAGE_LANG, lang);
       updateUILanguage();
       
-      // Re-render current data to update dynamic content
       if (window._lastEventData) {
         renderEvent(window._lastEventData);
       }
@@ -466,16 +484,18 @@
 
   async function cancel() {
     if (!requireEventId()) return;
-    const token = getToken();
-    if (!token) {
-      showToast(t("errorNoToken"), "error");
+    
+    const name = els.nameInput.value.trim();
+    if (!name) {
+      showToast(t("errorNameRequiredForCancel"), "error");
       return;
     }
-    if (!confirm(t("confirmCancel"))) return;
+    
+    if (!confirm(t("confirmCancelByName", { name: name }))) return;
 
     els.cancelBtn.disabled = true;
     try {
-      const data = await apiCall("cancel", { token });
+      const data = await apiCall("cancelbyname", { name, phone: "" });
       if (!data.ok) {
         showToast(data.error || t("errorCancelFailed"), "error");
         return;
@@ -487,6 +507,37 @@
       showToast(err.message || t("errorCancelFailed"), "error");
     } finally {
       els.cancelBtn.disabled = false;
+    }
+  }
+
+  async function cancelByName() {
+    if (!requireEventId()) return;
+    
+    let name = els.cancelNameInput ? els.cancelNameInput.value.trim() : "";
+    
+    if (!name) {
+      name = prompt(t("cancelByNamePrompt"));
+      if (!name) return;
+    }
+    
+    if (!confirm(t("confirmCancelByName", { name: name }))) return;
+
+    if (els.cancelByNameBtn) els.cancelByNameBtn.disabled = true;
+    
+    try {
+      const data = await apiCall("cancelbyname", { name, phone: "" });
+      if (!data.ok) {
+        showToast(data.error || t("errorCancelFailed"), "error");
+        return;
+      }
+      setToken("");
+      showToast(t("successCancelled"), "success");
+      renderEvent(data);
+      if (els.cancelNameInput) els.cancelNameInput.value = "";
+    } catch (err) {
+      showToast(err.message || t("errorCancelFailed"), "error");
+    } finally {
+      if (els.cancelByNameBtn) els.cancelByNameBtn.disabled = false;
     }
   }
 
@@ -504,7 +555,6 @@
   }
 
   function init() {
-    // Load saved language
     const savedLang = localStorage.getItem(STORAGE_LANG);
     if (urlLang === "zh" || urlLang === "zh-CN" || urlLang === "zh-TW" || urlLang === "zh-HK") {
       currentLang = "zh";
@@ -513,7 +563,6 @@
     } else if (savedLang && translations[savedLang]) {
       currentLang = savedLang;
     } else {
-      // Auto-detect browser language
       const browserLang = navigator.language || navigator.userLanguage;
       if (browserLang.startsWith("zh")) {
         currentLang = "zh";
@@ -522,10 +571,7 @@
       }
     }
     
-    // Apply language to UI elements
     updateUILanguage();
-    
-    // Setup language switcher buttons
     setupLanguageButtons();
 
     if (!apiUrl) {
@@ -560,7 +606,9 @@
       });
     }
     if (els.cancelBtn) els.cancelBtn.addEventListener("click", cancel);
+    if (els.cancelByNameBtn) els.cancelByNameBtn.addEventListener("click", cancelByName);
     if (els.refreshBtn) els.refreshBtn.addEventListener("click", refresh);
+    
     refresh();
     setInterval(refresh, 30000);
   }
