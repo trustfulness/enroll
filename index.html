@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1419" />
+    <meta name="description" content="Fair event enrollment — first come, first served" />
+    <title>Event enrollment</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1 id="eventTitle">Event enrollment</h1>
+        <p class="subtitle" id="eventSubtitle">Loading…</p>
+        <div class="badge-row">
+          <span class="badge" id="statusBadge">…</span>
+        </div>
+      </header>
+
+      <p id="demoBanner" class="demo-banner hidden">
+        Demo mode — data stays in this browser only. Set up Google Apps Script for real group use (see README).
+      </p>
+
+      <p id="configBanner" class="demo-banner hidden"></p>
+
+      <div id="loading" class="loading">Loading enrollment list…</div>
+
+      <div id="noEvent" class="card hidden">
+        <h2>Event not found</h2>
+        <p>Check the link from your WhatsApp group. It should look like <code>index.html?e=YOUR_EVENT_ID</code>.</p>
+      </div>
+
+      <div id="mainContent" class="hidden">
+        <div class="card">
+          <p class="rule">
+            Fair rule: order is by enrollment <strong>time on this page</strong>. Everyone sees the same list.
+            Cancel if you cannot attend so the next person can move up.
+          </p>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="value" id="confirmedStat">0</div>
+              <div class="label">Confirmed</div>
+            </div>
+            <div class="stat">
+              <div class="value" id="waitlistStat">0</div>
+              <div class="label">Waitlist</div>
+            </div>
+          </div>
+
+          <p id="myStatus" class="queue-meta hidden"></p>
+
+          <h2>Enroll</h2>
+          <form id="enrollForm">
+            <label for="name">Your name *</label>
+            <input id="name" name="name" type="text" required autocomplete="name" placeholder="e.g. Alex" />
+
+            <label for="phone">Phone (optional, helps identify you)</label>
+            <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="e.g. 9123 4567" />
+
+            <div class="btn-row">
+              <button type="submit" class="btn-primary" id="enrollBtn">Enroll</button>
+              <button type="button" class="btn-danger hidden" id="cancelBtn">Cancel my spot</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
+            <h2 style="margin: 0">Queue</h2>
+            <button type="button" class="btn-secondary" id="refreshBtn" style="flex: 0; min-width: auto; padding: 0.4rem 0.75rem; font-size: 0.85rem">
+              Refresh
+            </button>
+          </div>
+          <p id="queueEmpty" class="empty-state hidden">No enrollments yet. Be the first!</p>
+          <ul class="queue-list" id="queueList"></ul>
+        </div>
+      </div>
+
+      <footer>
+        Share this page in your WhatsApp group · Auto-refreshes every 30s
+      </footer>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
