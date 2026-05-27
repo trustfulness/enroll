@@ -311,7 +311,7 @@ function getActiveEnrollments_(eventId) {
   const rows = [];
 
   for (let i = 1; i < data.length; i++) {
-    if (data[i][1] === eventId && data[i][6] === "active") {
+    if (data[i][1] === eventId && data[i][5] === "active") {
       rows.push({
         enrollmentId: data[i][0],
         eventId: data[i][1],
