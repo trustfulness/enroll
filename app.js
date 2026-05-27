@@ -596,7 +596,8 @@
     if (els.refreshBtn) els.refreshBtn.addEventListener("click", refresh);
     
     refresh();
-    setInterval(refresh, 30000);
+    setInterval(refresh, 10000);
+    setInterval(refresh, refreshInterval);
   }
 
   if (document.readyState === "loading") {
