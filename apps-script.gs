@@ -32,7 +32,6 @@ function setup() {
     "eventId",
     "name",
     "phone",
-    "memberId",
     "enrolledAt",
     "status",
     "token",
@@ -172,7 +171,6 @@ function enroll_(params) {
     eventId: eventId,
     name: name,
     phone: phone,
-    memberId: "",
     enrolledAt: enrolledAt,
     status: "active",
     token: token,
@@ -319,10 +317,9 @@ function getActiveEnrollments_(eventId) {
         eventId: data[i][1],
         name: data[i][2],
         phone: data[i][3] || "",
-        memberId: data[i][4] || "",
-        enrolledAt: data[i][5],
-        status: data[i][6],
-        token: data[i][7],
+        enrolledAt: data[i][4],
+        status: data[i][5],
+        token: data[i][6],
       });
     }
   }
@@ -361,7 +358,6 @@ function appendEnrollment_(row) {
     row.eventId,
     row.name,
     row.phone,
-    row.memberId,
     row.enrolledAt,
     row.status,
     row.token,
