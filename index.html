@@ -56,8 +56,9 @@
             <label for="name" id="nameLabel">Your name *</label>
             <input id="name" name="name" type="text" required autocomplete="name" placeholder="e.g. Alex" />
 
-            <label for="phone" id="phoneLabel">Phone (optional, helps identify you)</label>
-            <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="e.g. 9123 4567" />
+            <label for="password" id="passwordLabel">4-digit password *</label>
+            <input id="password" name="password" type="password" required maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="****" />
+            <p id="passwordHint" style="font-size: 0.7rem; color: var(--muted); margin-top: -0.5rem; margin-bottom: 0.5rem;">Choose a 4-digit password (e.g., 1234) to secure your enrollment</p>
 
             <div class="btn-row">
               <button type="submit" class="btn-primary" id="enrollBtn">Enroll</button>
@@ -67,10 +68,11 @@
           
           <!-- Cancel by Name Section -->
           <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.1);">
-            <p style="font-size: 0.75rem; color: var(--muted); margin-bottom: 0.5rem;">Having trouble canceling? Cancel by entering your name below:</p>
-            <div class="btn-row">
-              <input type="text" id="cancelNameInput" placeholder="Enter your full name" style="flex: 2; margin-bottom: 0;" />
-              <button type="button" class="btn-secondary" id="cancelByNameBtn" style="flex: 1; background: rgba(245, 101, 101, 0.15); color: var(--danger);">Cancel by Name</button>
+            <p style="font-size: 0.75rem; color: var(--muted); margin-bottom: 0.5rem;" id="cancelHelpText">Having trouble canceling? Cancel by entering your name and password:</p>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+              <input type="text" id="cancelNameInput" placeholder="Enter your full name" style="width: 100%;" />
+              <input type="password" id="cancelPasswordInput" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" placeholder="4-digit password" style="width: 100%;" />
+              <button type="button" class="btn-secondary" id="cancelByNameBtn" style="background: rgba(245, 101, 101, 0.15); color: var(--danger);">Cancel by Name + Password</button>
             </div>
           </div>
         </div>
