@@ -7,7 +7,7 @@ const SHEET_EVENTS = "Events";
 const SHEET_ENROLLMENTS = "Enrollments";
 const TZ_HK = "Asia/Hong_Kong";
 const FMT_STORE = "yyyy-MM-dd HH:mm:ss";
-const FMT_DISPLAY = "d MMM yyyy, HH:mm";
+const FMT_DISPLAY = "d MMM yyyy, HH:mm:ss";
 
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
